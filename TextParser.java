@@ -232,7 +232,7 @@ public class TextParser {
 
         try (BufferedWriter writer =
                      Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
-
+            writer.write("Token   ID \n");
             // Term dictionary
             for (Map.Entry<String, Integer> entry : termEntries) {
 
@@ -249,6 +249,7 @@ public class TextParser {
             }
 
             writer.newLine();
+            writer.write("Document    ID\n");
 
             // Document dictionary
             for (Map.Entry<String, Integer> entry : documentEntries) {
