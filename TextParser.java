@@ -4,211 +4,277 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.regex.*;
 
-
 public class TextParser {
 
-    //Paths below are all relative to given project folder
-    private static final Path STOPWORDS = Paths.get("stopwordlist.txt");
-    private static final Path FT_DIR = Paths.get("ft911");
-    private static final Path OUTPUT_PATH = Paths.get("parser_output.txt");
-    private static final String INPUT_GLOB = "ft911_*";
+    // Paths relative to project directory
+    private static final Path STOPWORD_FILE = Paths.get("stopwordlist.txt");
+    private static final Path DOCUMENT_FOLDER = Paths.get("ft911");
+    private static final Path OUTPUT_FILE = Paths.get("parser_output.txt");
+    private static final String INPUT_FILE_PATTERN = "ft911_*";
 
-    //Data
-    private final Set<String> stopWords = new HashSet<>();
-    private final Set<String> uniqueTerms = new TreeSet<>();
-    private final Map<String, Integer> documentDictionary = new TreeMap<>();
+    // Data structures
+    private final Set<String> stopwordSet = new HashSet<>();
+    private final Set<String> termSet = new TreeSet<>();
+    private final Map<String, Integer> documentIdMap = new TreeMap<>();
 
-    //Porter Stemmer provided
-    private final Porter stemmer = new Porter();
+    // Porter Stemmer
+    private final Porter porterStemmer = new Porter();
 
-    //Regex Patterns:
+    // Regex Patterns
+    private static final Pattern DOC_BLOCK_PATTERN =
+            Pattern.compile("(?s)<DOC>.*?<\\/DOC>");
 
-    //Single document block
-    private static final Pattern documentPattern   = Pattern.compile("(?s)<DOC>.*?<\\/DOC>");
-    //DOCNO
-    private static final Pattern documentNoPattern = Pattern.compile("<DOCNO\\s*([^<\\s]+)\\s*<\\/DOCNO>", Pattern.CASE_INSENSITIVE);
-    //collect inner text
-    private static final Pattern textPattern = Pattern.compile("(?is)<TEXT>(.*?)<\\/TEXT>");
+    private static final Pattern DOCNO_PATTERN =
+            Pattern.compile("<DOCNO\\s*([^<\\s]+)\\s*<\\/DOCNO>", Pattern.CASE_INSENSITIVE);
 
-    //Tokenization: Splitting on non-alphanumeric; skip tokens that contain any digit
-    private static final Pattern splitPattern = Pattern.compile("[^A-Za-z0-9]+");
-    private static final Pattern hasDigit = Pattern.compile(".*\\d.*");
+    private static final Pattern TEXT_BLOCK_PATTERN =
+            Pattern.compile("(?is)<TEXT>(.*?)<\\/TEXT>");
+
+    private static final Pattern TOKEN_SPLIT_PATTERN =
+            Pattern.compile("[^A-Za-z0-9]+");
+
+    private static final Pattern DIGIT_PATTERN =
+            Pattern.compile(".*\\d.*");
 
     public static void main(String[] args) {
         try {
-            System.out.println("Running TextParser");
-            new TextParser().run();
-            System.out.println("Finished TextParser");
-        } catch(Exception e) {
-            System.err.println("Error: " + e.getMessage());
+            System.out.println("Starting Text Parsing...");
+            new TextParser().executeParser();
+            System.out.println("Parsing completed successfully.");
+        } catch (Exception e) {
+            System.err.println("Parser failed: " + e.getMessage());
             e.printStackTrace();
             System.exit(1);
         }
     }
 
-    //run method: load stopwords => scan files =>parse docs =>write dictionaries
-    private void run() throws IOException {
-        //Load the stopwords
-        loadStopWordsList(STOPWORDS);
+    // Main execution pipeline
+    private void executeParser() throws IOException {
 
-        //Iterate all Ft911_* files (relative path, no absolute paths)
-        List<Path> inputs = listInputFiles(FT_DIR, INPUT_GLOB);
-        if(inputs.isEmpty()){
-            throw new FileNotFoundException("No input files matching '"+INPUT_GLOB+"'in folder 'ft911'.");
+        // Load stopwords
+        loadStopwordFile(STOPWORD_FILE);
+
+        // Find all input files
+        List<Path> inputFiles = getInputFiles(DOCUMENT_FOLDER, INPUT_FILE_PATTERN);
+
+        if (inputFiles.isEmpty()) {
+            throw new FileNotFoundException(
+                    "No files matching '" + INPUT_FILE_PATTERN + "' found in folder 'ft911'.");
         }
 
-        //Parse each file -> each <DOC>
-        for (Path p : inputs){
-            String content = Files.readString(p, StandardCharsets.UTF_8);
-            Matcher mDoc = documentPattern.matcher(content);
-            while(mDoc.find()){
-                String docBlock = mDoc.group();
-                String docNo = extractDocNo(docBlock);
-                if(docNo == null) continue; //skip for malformed docs quietly
+        // Process each file
+        for (Path filePath : inputFiles) {
 
-                //document dictionary rule: FT911-X ->ID x (numeric part)
-                Integer docId = extractNumericId(docNo);
-                if(docId==null) continue; //skip if docNo is invalid
-                documentDictionary.put(docNo,docId);
+            String fileContent = Files.readString(filePath, StandardCharsets.UTF_8);
 
-                //Collect text from all <TEXT> blocks inside this document
-                StringBuilder text = new StringBuilder();
-                Matcher mText = textPattern.matcher(docBlock);
-                while(mText.find()) {
-                    text.append(mText.group(1)).append(' ');
+            Matcher docMatcher = DOC_BLOCK_PATTERN.matcher(fileContent);
+
+            while (docMatcher.find()) {
+
+                String documentBlock = docMatcher.group();
+
+                String documentName = extractDocumentName(documentBlock);
+
+                if (documentName == null)
+                    continue;
+
+                Integer documentId = parseDocumentId(documentName);
+
+                if (documentId == null)
+                    continue;
+
+                documentIdMap.put(documentName, documentId);
+
+                // Extract text from TEXT tags
+                StringBuilder combinedText = new StringBuilder();
+
+                Matcher textMatcher = TEXT_BLOCK_PATTERN.matcher(documentBlock);
+
+                while (textMatcher.find()) {
+                    combinedText.append(textMatcher.group(1)).append(' ');
                 }
 
-                //Tokenization + cleaning + stopword removal + stemming
-                for(String raw : splitPattern.split(text.toString())){
-                    if(raw.isEmpty()) continue;
-                    String t= raw.toLowerCase(Locale.ROOT);
-                    //Skip tokens that are numbers or contain any digit
-                    if(hasDigit.matcher(t).matches()) continue;
-                    if(stopWords.contains(t)) continue;
+                // Tokenization + preprocessing
+                for (String token : TOKEN_SPLIT_PATTERN.split(combinedText.toString())) {
 
-                    //Stem using Porter
-                    String stem = stem(t);
-                    if(!stem.isEmpty()){
-                        uniqueTerms.add(stem);
+                    if (token.isEmpty())
+                        continue;
+
+                    String normalizedToken = token.toLowerCase(Locale.ROOT);
+
+                    if (DIGIT_PATTERN.matcher(normalizedToken).matches())
+                        continue;
+
+                    if (stopwordSet.contains(normalizedToken))
+                        continue;
+
+                    String stemmedToken = applyStemming(normalizedToken);
+
+                    if (!stemmedToken.isEmpty()) {
+                        termSet.add(stemmedToken);
                     }
                 }
             }
         }
 
-        //Assign incremental term IDs in Alphabetical order as per given instructions.
-        Map<String,Integer> termDictionary = new LinkedHashMap<>();
-        int termId =1;
-        for (String term: uniqueTerms){
+        // Assign term IDs
+        Map<String, Integer> termDictionary = new LinkedHashMap<>();
+
+        int termId = 1;
+
+        for (String term : termSet) {
             termDictionary.put(term, termId++);
         }
 
-        //Write parser_output.txt
-        writeOutputDirectories(termDictionary, documentDictionary, OUTPUT_PATH);
+        // Write final output
+        writeParserOutput(termDictionary, documentIdMap, OUTPUT_FILE);
     }
 
-    //Helper methods implementation
-    private void loadStopWordsList(Path stopPath) throws IOException {
-        try(BufferedReader br = Files.newBufferedReader(stopPath, StandardCharsets.UTF_8)){
+    // Load stopword list
+    private void loadStopwordFile(Path stopwordPath) throws IOException {
+
+        try (BufferedReader reader =
+                     Files.newBufferedReader(stopwordPath, StandardCharsets.UTF_8)) {
+
             String line;
-            while((line=br.readLine())!= null){
-                String w = line.trim().toLowerCase(Locale.ROOT);
-                if(!w.isEmpty()) stopWords.add(w);
+
+            while ((line = reader.readLine()) != null) {
+
+                String word = line.trim().toLowerCase(Locale.ROOT);
+
+                if (!word.isEmpty())
+                    stopwordSet.add(word);
             }
         }
     }
 
-    //Finds all input files under dir that match the glob
-    private List<Path> listInputFiles(Path dir, String glob) throws IOException {
-        List<Path> files = new ArrayList<>();
-        try(DirectoryStream<Path> dstream = Files.newDirectoryStream(dir, glob)){
-            for(Path p:dstream){
-                if(Files.isRegularFile(p)) files.add(p);
+    // Retrieve input files
+    private List<Path> getInputFiles(Path directory, String filePattern) throws IOException {
+
+        List<Path> fileList = new ArrayList<>();
+
+        try (DirectoryStream<Path> stream =
+                     Files.newDirectoryStream(directory, filePattern)) {
+
+            for (Path path : stream) {
+
+                if (Files.isRegularFile(path)) {
+                    fileList.add(path);
+                }
             }
         }
-        //Sort by filename to keep processing deterministic
-        files.sort(Comparator.naturalOrder());
-        return files;
+
+        fileList.sort(Comparator.naturalOrder());
+
+        return fileList;
     }
 
-    //Extracts the <DOCNO>…</DOCNO> contents
-    private String extractDocNo(String docBlock) {
-        Matcher m = documentNoPattern.matcher(docBlock);
-        return m.find() ? m.group(1).trim() : null;
+    // Extract DOCNO
+    private String extractDocumentName(String documentBlock) {
+
+        Matcher matcher = DOCNO_PATTERN.matcher(documentBlock);
+
+        return matcher.find() ? matcher.group(1).trim() : null;
     }
 
-    //parses numeric tail after the final '-' in docNo (e.g., FT911-1234 -> 1234)
-    private Integer extractNumericId(String docNo) {
-        //to expect something like "FT911-1234" -> 1234
-        int dash = docNo.lastIndexOf('-');
-        if(dash<=0 || dash == docNo.length()-1)
+    // Extract numeric document ID
+    private Integer parseDocumentId(String documentName) {
+
+        int dashIndex = documentName.lastIndexOf('-');
+
+        if (dashIndex <= 0 || dashIndex == documentName.length() - 1)
             return null;
-        String tail = docNo.substring(dash + 1);
+
+        String numericPart = documentName.substring(dashIndex + 1);
+
         try {
-            return Integer.parseInt(tail);
-        } catch(NumberFormatException nfe){
+            return Integer.parseInt(numericPart);
+        } catch (NumberFormatException e) {
             return null;
         }
     }
 
-    private String stem(String token) {
-        //Porter.java usually exposes stripAffixes(String) or similar
-        try{
-            return stemmer.stripAffixes(token);
-        }catch(Throwable t){
-            //fallback: return token as-is if any unexpected issue
+    // Apply Porter stemming
+    private String applyStemming(String token) {
+
+        try {
+            return porterStemmer.stripAffixes(token);
+        } catch (Throwable t) {
             return token;
         }
     }
 
-    private void writeOutputDirectories(Map<String,Integer> termDictionary, Map<String,Integer> documentDictionary, Path out) throws IOException{
-        //create a parent directory if needed
-        Path parent = out.getParent();
-        if(parent !=null)
-            Files.createDirectories(parent); //parent is null if writing in "."
-        List<Map.Entry<String,Integer>> terms = new ArrayList<>(termDictionary.entrySet());
-        terms.sort(Map.Entry.comparingByKey()); //alphabetical, just in case
+    // Write output file
+    private void writeParserOutput(
+            Map<String, Integer> termDictionary,
+            Map<String, Integer> documentDictionary,
+            Path outputPath) throws IOException {
 
-        //Sorting docs by their numeric ID, then by name.
-        List<Map.Entry<String,Integer>> docs = new ArrayList<>(documentDictionary.entrySet());
-        docs.sort(Comparator.<Map.Entry<String,Integer>,Integer>comparing(Map.Entry::getValue)
-                .thenComparing(Map.Entry::getKey));
+        Path parentDir = outputPath.getParent();
 
-        try(BufferedWriter bw = Files.newBufferedWriter(out, StandardCharsets.UTF_8)){
-            //Terms
-            for(Map.Entry<String,Integer> e:terms) {
-                String term = safeField(e.getKey());
-                Integer id = e.getValue();
-                if(!term.isEmpty() && id != null){
-                    bw.write(term);
-                    bw.write('\t');
-                    bw.write(Integer.toString(id));
-                    bw.newLine();
+        if (parentDir != null)
+            Files.createDirectories(parentDir);
+
+        List<Map.Entry<String, Integer>> termEntries =
+                new ArrayList<>(termDictionary.entrySet());
+
+        termEntries.sort(Map.Entry.comparingByKey());
+
+        List<Map.Entry<String, Integer>> documentEntries =
+                new ArrayList<>(documentDictionary.entrySet());
+
+        documentEntries.sort(
+                Comparator.<Map.Entry<String, Integer>, Integer>comparing(Map.Entry::getValue)
+                        .thenComparing(Map.Entry::getKey));
+
+        try (BufferedWriter writer =
+                     Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
+
+            // Term dictionary
+            for (Map.Entry<String, Integer> entry : termEntries) {
+
+                String term = sanitizeField(entry.getKey());
+                Integer id = entry.getValue();
+
+                if (!term.isEmpty() && id != null) {
+
+                    writer.write(term);
+                    writer.write('\t');
+                    writer.write(Integer.toString(id));
+                    writer.newLine();
                 }
             }
-            //blank separator
-            bw.newLine();
 
-            //Then documents (name then ID). doc Ids are already the numeric part.
-            for(Map.Entry<String,Integer> e : docs){
-                String docNo = safeField(e.getKey());
-                Integer id = e.getValue();
+            writer.newLine();
 
-                //Skip malformed entries
-                if(docNo.isEmpty() || id==null || id<=0) continue;
-                bw.write(docNo);
-                bw.write('\t');
-                bw.write(Integer.toString(id));
-                bw.newLine();
+            // Document dictionary
+            for (Map.Entry<String, Integer> entry : documentEntries) {
+
+                String documentName = sanitizeField(entry.getKey());
+                Integer id = entry.getValue();
+
+                if (documentName.isEmpty() || id == null || id <= 0)
+                    continue;
+
+                writer.write(documentName);
+                writer.write('\t');
+                writer.write(Integer.toString(id));
+                writer.newLine();
             }
         }
     }
 
-    //to remove any whitespace or stray characters.
-    private static String safeField(String s) {
-        if(s==null) return "";
-        String cleaned=s.replace("\r","").replace("\n","").trim();
-        if(!cleaned.isEmpty() && cleaned.charAt(0)=='>'){
-            cleaned=cleaned.substring(1).trim();
+    // Clean fields
+    private static String sanitizeField(String value) {
+
+        if (value == null)
+            return "";
+
+        String cleaned =
+                value.replace("\r", "").replace("\n", "").trim();
+
+        if (!cleaned.isEmpty() && cleaned.charAt(0) == '>') {
+            cleaned = cleaned.substring(1).trim();
         }
         return cleaned;
     }
