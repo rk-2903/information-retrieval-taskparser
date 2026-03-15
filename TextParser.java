@@ -145,6 +145,7 @@ public class TextParser {
                 if (!word.isEmpty())
                     stopwordSet.add(word);
             }
+            System.out.println("Stop word Count: " + stopwordSet.size());
         }
     }
 
@@ -223,6 +224,8 @@ public class TextParser {
         List<Map.Entry<String, Integer>> documentEntries =
                 new ArrayList<>(documentDictionary.entrySet());
 
+        System.out.println("Term Dictionary size: " + termDictionary.size());
+        System.out.println("Document Dictionary size: " + documentDictionary.size());
         documentEntries.sort(
                 Comparator.<Map.Entry<String, Integer>, Integer>comparing(Map.Entry::getValue)
                         .thenComparing(Map.Entry::getKey));
