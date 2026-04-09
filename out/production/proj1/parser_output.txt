@@ -1,4 +1,5 @@
-Token   IDaa	1
+Token   ID 
+aa	1
 aaa	2
 aachen	3
 aaf	4
@@ -7,12 +8,12 @@ aakvaag	6
 aalborg	7
 aaron	8
 ab	9
-ababa	10
+ababa   10
 aback	11
-abalkin	12
+abalkin 12
 abandon	13
 abash	14
-abat	15
+abat    15
 abattoir	16
 abb	17
 abba	18
@@ -56,11 +57,11 @@ abington	55
 abingworth	56
 abitibi	57
 abitur	58
-abject	59
+abject  59
 abk	60
 ablaz	61
-abli	62
-ablitt	63
+abli    62
+ablitt  63
 ablution	64
 abn	65
 abnorm	66
@@ -32841,7 +32842,8 @@ zwickau	32840
 zy	32841
 zyci	32842
 
-Document    IDFT911-1	1
+Document    ID
+FT911-1	1
 FT911-2	2
 FT911-3	3
 FT911-4	4

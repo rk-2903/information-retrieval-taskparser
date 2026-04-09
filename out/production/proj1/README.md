@@ -5,6 +5,7 @@ CSCE 5200 – Information Retrieval and Web Search
 ## Author
 
 Name: (Rahul Kumar)
+
 Course: CSCE 5200 – Information Retrieval and Web Search
 
 ---
