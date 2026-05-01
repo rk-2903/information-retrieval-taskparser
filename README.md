@@ -1,126 +1,123 @@
-# Text Parser – Programming Assignment 1
+CSCE 5200 — Information Retrieval
 
-CSCE 5200 – Information Retrieval and Web Search
+Project Phase 2: Search Engine Index Construction
 
-## Author
+Author: Rahul Kumar
 
-Name: (Rahul Kumar)
+--------------------------------------------------------------------------------
+OVERVIEW
+--------------------------------------------------------------------------------
+The report outlines the design and implementation of the Indexer part of an Information Retrieval (IR) engine, which was developed as Phase 2 of a course project. The Indexer is fed a collection of documents in TREC format and gives as output two basic indexes (a Forward Index and an Inverted Index) on which Phase 3 query retrieval will be based.
+This system is written in Java and uses the same preprocessing pipeline as in Phase 1 (TextParser): lowercasing, tokenisation, filtering out digits, removing stop-words, and Porter stemming.2. Architecture & Design
 
-Course: CSCE 5200 – Information Retrieval and Web Search
+Output files produced:
+```term_dict.txt      — stemmedTerm <TAB> termID
+doc_dict.txt       — DOCNO <TAB> docID
+forward_index.txt  — docID: termID:freq; termID:freq; ...
+inverted_index.txt — termID: docID:freq; docID:freq; ...
+```
+--------------------------------------------------------------------------------
+FILES INCLUDED
+--------------------------------------------------------------------------------
+Indexer.java       Main indexer program (Phase 2)
+Porter.java        Porter stemmer (reused from Phase 1)
+readme.txt         This file
+report.docx        Project report
 
----
+--------------------------------------------------------------------------------
+PREREQUISITES
+--------------------------------------------------------------------------------
+Java 11 or later  (tested with Java 17)
 
-## Project Overview
+Verify your Java version:
+java -version
 
-This project implements a **Text Parser** for an Information Retrieval (IR) system. The parser processes TREC documents, performs tokenization, removes stopwords, applies Porter stemming, and generates:
+--------------------------------------------------------------------------------
+COMPILE
+--------------------------------------------------------------------------------
+Place all .java files in the same directory, then run:
 
-* **Term Dictionary:** Maps each unique term to a unique term ID
-* **Document Dictionary:** Maps each document name to a document ID
+#### javac Porter.java Indexer.java
 
-The output is stored in `parser_output.txt`.
+--------------------------------------------------------------------------------
+TO RUN
+--------------------------------------------------------------------------------
+Usage:
+#### java Indexer `<corpusDir_Path>` `<stopwordFile_Path>` `<outputDir_Path>`
 
----
+Arguments:
+```
+corpusDir      Path to the folder containing the TREC corpus files (e.g. ft911/)
+stopwordFile   Path to the stop-word list file (e.g. stopwordlist.txt)
+outputDir      Path to the folder where output files will be written.
+               The folder is created automatically if it does not exist. (e.g. output_phase2/)
+```
+Example:
+java Indexer ft911 stopwordlist.txt output_phase2
 
-## Folder Structure
-
-Ensure the following files and folders are in the same project directory:
+--------------------------------------------------------------------------------
+EXPECTED DIRECTORY LAYOUT BEFORE RUNNING
+--------------------------------------------------------------------------------
 
 ```
-ProjectFolder/
-│
-├── TextParser.java
+your_project_folder/
+├── Indexer.java
 ├── Porter.java
 ├── stopwordlist.txt
-├── ft911/
-│   ├── ft911_1
-│   ├── ft911_2
-│   └── ...
-└── parser_output.txt (generated after execution)
+└── ft911/
+    ├── ft911_1
+    ├── ft911_2
+    └── ...  (all TREC corpus files)
 ```
+--------------------------------------------------------------------------------
+EXPECTED OUTPUT
+--------------------------------------------------------------------------------
+After a successful run you will see console output similar to:
 
----
+Stop words loaded: 523
+Indexing time (ms)        : 1374
+forward_index.txt  (bytes): 5486324
+inverted_index.txt (bytes): 5883519
+Documents indexed         : 5368
+Unique terms              : 36247
 
-## Requirements
+Query mode (type ':q' to exit)
+Enter a term to see its inverted-index postings (DOCNO / docID : freq):
 
-* Java JDK 8 or higher
-* Command line / terminal access
+Enter any term:
 
----
-
-## How to Compile
-
-Open a terminal in the project directory and run:
-
-```
-javac Porter.java TextParser.java
-```
-
-This will generate the `.class` files.
-
----
-
-## How to Run
-
-Execute the parser using:
 
 ```
-java TextParser
+And the output folder will contain:
+output_phase2/
+├── term_dict.txt
+├── doc_dict.txt
+├── forward_index.txt
+└── inverted_index.txt
 ```
 
----
+--------------------------------------------------------------------------------
+INTERACTIVE QUERY MODE
+--------------------------------------------------------------------------------
+After indexing completes the program enters an interactive query loop.
 
-## Output
+- Type any English word and press Enter.
+- The program applies the same preprocessing (lowercase, stop-word check,
+  Porter stemming) used during indexing, then looks up the term in the
+  inverted index and prints every document it appears in along with its
+  frequency.
+- Type :q and press Enter (or press Ctrl+D) to exit.
 
-After successful execution, the program generates:
-
+Example:
 ```
-parser_output.txt
-```
+Enter any term: Carbon
+ 
+Term='Carbon'  stemmed='carbon'  termID=401  appears in 36 doc(s):
 
-The file contains:
-
-1. **Term Dictionary**
-
-```
-aa	1
-aaa	2
-aachen	3
-aaf	4
-aah	5
-aakvaag	6
-...
+carbon(401): 6:1; 28:1; 39:1; 136:1; 241:1; 486:2; 566:2; 801:1; 997:1; 1052:1; 1086:3; 1358:1; 1911:1; 1952:2; 2166:1; 2198:4; 2223:1; 2698:3; 2751:1; 2967:2; 3179:1; 3902:2; 3908:2; 3913:1; 4339:1; 4434:1; 4521:2; 4555:3; 4723:1; 4933:1; 4970:3; 5013:1; 5086:1; 5092:1; 5093:1; 5223:1;
 ```
 
-2. **Document Dictionary**
-
 ```
-FT911-1	1
-FT911-2	2
-FT911-3	3
-FT911-4	4
-FT911-5	5
-...
+Enter any term: the
+Dropped — 'the' is a stop word.
 ```
-
----
-
-## Processing Steps Implemented
-
-The parser performs the following preprocessing steps:
-
-1. Tokenization (split on non-alphanumeric characters)
-2. Lowercase conversion
-3. Removal of tokens containing numbers
-4. Stopword removal
-5. Porter stemming
-6. Term dictionary generation
-7. Document dictionary generation
-
----
-
-## Notes
-
-* All paths are **relative**, so the project should run without modification.
-* Input files must be located inside the **ft911** folder.
-* The program automatically processes all files matching `ft911_*`.
-
